@@ -1,6 +1,9 @@
+//CODIGO PARA CONTROLAR UN MUX DE 8 SALIDAS (16 en realidad) POR I2C, QUE PASA UNA SEÑAL
+//DIGITAL A 12 DAC (convertidor digital-analógico) QUE ESTÁN A SU SALIDA
+//DADO QUE EL HELPER.H NO ME PERTENECE NO PUEDO COMPARTIRLO :)
 #include <Adafruit_MCP4725.h>
 #include <Wire.h>
-#include "C:\'direccion del archivo\HELPER.H"  //LA DIRECCION DEBE SER MODIFICADA EN FUNCION DE 
+#include "C:\'direccion del archivo'\HELPER.H"  //LA DIRECCION DEBE SER MODIFICADA EN FUNCION DE 
                                                                                 //DONDE SE GUARDE EL HELPER.H
 //#include <tca9548A>
 #define mux_ADDRESS 0x70 // Dirección I2C del multiplexor TCA9548A
