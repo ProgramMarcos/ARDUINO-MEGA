@@ -6,13 +6,13 @@
 const int eventoCamara = 2;
 const float V_ref = 4.69; //Tensión de referencia
 const int AjusteOK = 0; //salida de los DAC no ajustada
-const int TipoFoco = 0; //0 --> BMW, 1 --> VW
-const float PendienteBMW = 0.000723; //pendiente
+const int TipoFoco = 0; //0 --> marca1, 1 --> marca2
+const float Pendientemarca1 = 0.000723; //pendiente
 const float tempValues[] = {-40, 25, 110, 125, 130}; //valores de temp
 const float Consigna[] = {0.883, 0.93, 0.837, 0.6975, 0.465}; //valores de corriente 95%,100%,90%,75%,50%
-const float PendienteVW = -0.016;
-const float TemperaturasVW[] = {112, 131};
-const float CorrientesVW[] = {0.95, 0.665};
+const float Pendientemarca2 = -0.016;
+const float Temperaturasmarca2[] = {112, 131};
+const float Corrientesmarca2[] = {0.95, 0.665};
 const float NTC_RPU = 10e3;   // Resistencia de pull-up para NTC
 const float SHC_A = 1.14025E-03; // Constantes para la linealización de NTC
 const float SHC_B = 2.32498E-04;
@@ -95,7 +95,7 @@ float calculateDerating(float temperature, uint8_t salidaMUX) {
     if (temperature <= tempValues[0]) {
       voltage = Consigna[0] * 2.5;
     } else if (temperature <= tempValues[1]) {
-      voltage = 2.5 * (Consigna[0] + (PendienteBMW * Consigna[0] * (-(tempValues[0] - temperature))));
+      voltage = 2.5 * (Consigna[0] + (Pendientemarca1 * Consigna[0] * (-(tempValues[0] - temperature))));
     } else if (temperature <= tempValues[2]) {
       voltage = Consigna[1] * 2.5;
     } else if (temperature <= tempValues[3]) {
@@ -108,12 +108,12 @@ float calculateDerating(float temperature, uint8_t salidaMUX) {
       voltage = 0.0;
     }
   } else {
-    if (temperature <= TemperaturasVW[0]) {
-      voltage = CorrientesVW[0];
-    } else if (temperature <= TemperaturasVW[1]) {
-      voltage = CorrientesVW[0] - (PendienteVW * CorrientesVW[0] * (TemperaturasVW[0] - temperature));
-    } else if (temperature > TemperaturasVW[1] && temperature <= 150.0) {
-      voltage = CorrientesVW[1];
+    if (temperature <= Temperaturasmarca2[0]) {
+      voltage = Corrientesmarca2[0];
+    } else if (temperature <= Temperaturasmarca2[1]) {
+      voltage = Corrientesmarca2[0] - (Pendientemarca2 * Corrientesmarca2[0] * (Temperaturasmarca2[0] - temperature));
+    } else if (temperature > Temperaturasmarca2[1] && temperature <= 150.0) {
+      voltage = Corrientesmarca2[1];
     } else {
       voltage = 0.0;
     }
