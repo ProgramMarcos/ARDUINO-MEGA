@@ -1,0 +1,231 @@
+#include <Adafruit_MCP4725.h>
+#include <Adafruit_MCP342X.h>
+#include <Wire.h>
+#include <math.h>
+
+const int eventoCamara = 2;
+const float V_ref = 4.69; //Tensión de referencia
+const int AjusteOK = 0; //salida de los DAC no ajustada
+const int TipoFoco = 0; //0 --> BMW, 1 --> VW
+const float PendienteBMW = 0.000723; //pendiente
+const float tempValues[] = {-40, 25, 110, 125, 130}; //valores de temp
+const float Consigna[] = {0.883, 0.93, 0.837, 0.6975, 0.465}; //valores de corriente 95%,100%,90%,75%,50%
+const float PendienteVW = -0.016;
+const float TemperaturasVW[] = {112, 131};
+const float CorrientesVW[] = {0.95, 0.665};
+const float NTC_RPU = 10e3;   // Resistencia de pull-up para NTC
+const float SHC_A = 1.14025E-03; // Constantes para la linealización de NTC
+const float SHC_B = 2.32498E-04;
+const float SHC_C = 9.23464E-08;
+const float kp = 0.5;   // Constante proporcional para PID
+const float ki = 0.1;   // Constante integral para PID
+const float kd = 0.2;   // Constante derivativa para PID
+
+#define mux_ADDRESS 0x70
+#define mux_ADDRESS1 0x71
+#define mux_ADDRESS2 0x72
+#define mux_ADDRESS3 0x73
+#define DAC_ADDRESS_1 0x66
+#define ADC_ADDRESS 0x68
+#define MUX_CHANNEL_DAC1 0
+#define MUX_CHANNEL_DAC2 1
+#define MUX_CHANNEL_DAC3 2
+#define MUX_CHANNEL_DAC4 3
+#define MUX_CHANNEL_DAC5 4
+#define MUX_CHANNEL_DAC6 5
+
+Adafruit_MCP4725 dac1;
+Adafruit_MCP342X adc;
+
+float integral = 0;
+float derivative = 0;
+float lastError = 0;
+float lastOutput = 0;
+
+float ntcRead1(int Pin) {
+  float R_ntc, ln_Rntc, T_K, T_C, V_in, ADC_R;
+
+  ADC_R = analogRead(Pin);
+
+  if (ADC_R > 0.0) {
+    V_in = (V_ref * ADC_R / 1023.0);
+    R_ntc = NTC_RPU * (V_ref - V_in) / V_in;
+  } else {
+    V_in = 0;
+    R_ntc = 0.01;
+  }
+
+  ln_Rntc = log(R_ntc);
+  T_K = 1.0 / (SHC_A + (SHC_B * ln_Rntc) + (SHC_C * pow(ln_Rntc, 3)));
+  T_C = T_K - 273.15;
+
+  return T_C;
+}
+
+float ajustePID(float setpoint, float actual) {
+  float error = setpoint - actual;
+  integral += error;
+  derivative = error - lastError;
+  
+  float output = kp * error + ki * integral + kd * derivative;
+  
+  if (output > 1.0) {
+    output = 1.0;
+  } else if (output < 0.0) {
+    output = 0.0;
+  }
+
+  output *= 4095;
+
+  if (abs(output - lastOutput) < 1.0) {
+    output = lastOutput;
+  }
+
+  lastError = error;
+  lastOutput = output;
+
+  return output;
+}
+
+float calculateDerating(float temperature, uint8_t salidaMUX) {
+  float voltage = 0.0;
+  float vAjustado = 0.0;
+
+  if (TipoFoco == 0) {
+    if (temperature <= tempValues[0]) {
+      voltage = Consigna[0] * 2.5;
+    } else if (temperature <= tempValues[1]) {
+      voltage = 2.5 * (Consigna[0] + (PendienteBMW * Consigna[0] * (-(tempValues[0] - temperature))));
+    } else if (temperature <= tempValues[2]) {
+      voltage = Consigna[1] * 2.5;
+    } else if (temperature <= tempValues[3]) {
+      voltage = Consigna[2] * 2.5;        
+    } else if (temperature <= tempValues[4]) {
+      voltage = Consigna[3] * 2.5;
+    } else if (temperature > tempValues[4] && temperature <= 150.0 ) {
+      voltage = Consigna[4] * 2.5;
+    } else {
+      voltage = 0.0;
+    }
+  } else {
+    if (temperature <= TemperaturasVW[0]) {
+      voltage = CorrientesVW[0];
+    } else if (temperature <= TemperaturasVW[1]) {
+      voltage = CorrientesVW[0] - (PendienteVW * CorrientesVW[0] * (TemperaturasVW[0] - temperature));
+    } else if (temperature > TemperaturasVW[1] && temperature <= 150.0) {
+      voltage = CorrientesVW[1];
+    } else {
+      voltage = 0.0;
+    }
+  }
+
+  vAjustado = ajustePID(voltage, salidaMUX);
+  return vAjustado;
+}
+
+
+
+void seleccionaMUX(int canal, float temperatura, int focoSEL) {
+  uint8_t muxAddress;
+  float Vout = 0.0;
+
+  if (canal == 0) muxAddress = mux_ADDRESS;
+  else if (canal == 1) muxAddress = mux_ADDRESS1;
+  else if (canal == 2) muxAddress = mux_ADDRESS2;
+  else if (canal == 3) muxAddress = mux_ADDRESS3;
+
+  Wire.beginTransmission(muxAddress);
+  
+  if (focoSEL == 1) {
+    Wire.write(1 << MUX_CHANNEL_DAC1);
+    Wire.endTransmission();
+    Vout = calculateDerating(temperatura, MUX_CHANNEL_DAC1);
+    dac1.setVoltage(Vout, false);
+      Wire.beginTransmission(muxAddress);
+    Wire.write(1 << MUX_CHANNEL_DAC2);
+    Wire.endTransmission();
+    Vout=calculateDerating(temperatura,MUX_CHANNEL_DAC2);
+    dac1.setVoltage(Vout, false);
+  }
+  else if (focoSEL == 2) {
+    Wire.write(1 << MUX_CHANNEL_DAC3);
+    Wire.endTransmission();
+    Vout=calculateDerating(temperatura,MUX_CHANNEL_DAC3);
+    dac1.setVoltage(Vout, false);
+
+    Wire.beginTransmission(muxAddress);
+    Wire.write(1 << MUX_CHANNEL_DAC4);
+    Wire.endTransmission();
+    Vout=calculateDerating(temperatura,MUX_CHANNEL_DAC4);
+    dac1.setVoltage(Vout, false);
+  }
+  else if (focoSEL == 3) {
+    Wire.write(1 << MUX_CHANNEL_DAC5);
+    Wire.endTransmission();
+    Vout=calculateDerating(temperatura,MUX_CHANNEL_DAC5);
+    dac1.setVoltage(Vout, false);
+
+    Wire.beginTransmission(muxAddress);
+    Wire.write(1 << MUX_CHANNEL_DAC6);
+    Wire.endTransmission();
+    Vout=calculateDerating(temperatura,MUX_CHANNEL_DAC6);
+    dac1.setVoltage(Vout, false);
+  }
+  Serial.print("Temp NTC ");
+  Serial.print(canal);
+  Serial.print("_");
+  Serial.print(focoSEL);
+  Serial.print(": ");
+  Serial.println(temperatura);
+}
+
+void setup() {
+  Serial.begin(9600);
+  adc.begin(ADC_ADDRESS);
+  adc.setResolution(12);
+  adc.setGain(1);
+  dac1.begin(DAC_ADDRESS_1);
+  pinMode(eventoCamara, INPUT);
+}
+
+void loop() {
+  while (digitalRead(eventoCamara) == HIGH) {
+    float tem1 = ntcRead1(A0);
+    float tem2 = ntcRead1(A1);
+    float tem3 = ntcRead1(A2);
+    float tem4 = ntcRead1(A3);
+    float tem5 = ntcRead1(A4);
+    float tem6 = ntcRead1(A5);
+
+    seleccionaMUX(0, tem1, 1);
+    seleccionaMUX(0, tem2, 2);
+    seleccionaMUX(0, tem3, 3);
+    delay(100);
+    seleccionaMUX(2, tem3, 1);
+    seleccionaMUX(2, tem4, 2);
+    seleccionaMUX(2, tem5, 3);
+
+    delay(1000);
+  }
+
+  while (digitalRead(eventoCamara) == LOW) {
+    float tem1 = ntcRead1(A0);
+    float tem2 = ntcRead1(A1);
+    float tem3 = ntcRead1(A2);
+    float tem4 = ntcRead1(A3);
+    float tem5 = ntcRead1(A4);
+    float tem6 = ntcRead1(A5);
+
+    seleccionaMUX(0, tem1, 1);
+    seleccionaMUX(0, tem2, 2);
+    seleccionaMUX(0, tem3, 3);
+    delay(100);
+    seleccionaMUX(2, tem3, 1);
+    seleccionaMUX(2, tem4, 2);
+    seleccionaMUX(2, tem5, 3);
+
+    delay(1000);
+  }
+
+  delay(500);
+}
