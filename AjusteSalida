@@ -14,18 +14,18 @@ const float V_ref = 4.69; //Tensión de referencia
 const int AjusteOK = 0; //salida de los DAC no ajustada
 //si se ajusta cambiar valor a 1
 
-const int TipoFoco = 0; //0 -->bmw
-                        //1 -->vw
+const int TipoFoco = 0; //0 -->marca1
+                        //1 -->marca2
                         
-const float PendienteBMW = 0.000723; //pendiente
+const float Pendiente1 = 0.000723; //pendiente
 const float tempValues[] = {-40, 25, 110, 125, 130}; //valores de temp
 const float Consigna[] = {0.883, 0.93, 0.837, 0.6975, 0.465}; //valores de corriente 95%,100%,90%,75%,50%
 
-const float PendienteVW = -0.016;
-const float TemperaturasVW[] = {112, 131};
-const float CorrientesVW[] = {0.95, 0.665};
+const float Pendiente2 = -0.016;
+const float Temperaturas2[] = {112, 131};
+const float Corrientes2[] = {0.95, 0.665};
 
-//VALORES DE LAS CONSTANTES PARA IKOR BMW, SI CAMBIA EL MODELO DE FOCO MIRAR CUÁLES SERÍAN ESTOS VALORES
+//VALORES DE LAS CONSTANTES PARA marca1, SI CAMBIA EL MODELO DE FOCO MIRAR CUÁLES SERÍAN ESTOS VALORES
 // NTC thermistor maxium value (ohms)
 const float NTC_RPU = 10e3;   // Pull-up resistor voltage divisor (ohms) - should be the same as NTC
 const float SHC_A = 1.14025E-03; // NTC linealization constant - grade0, offset
